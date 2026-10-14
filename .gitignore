@@ -1,0 +1,14 @@
+# Local Python virtual environment
+kiet-cse/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+
+# Local tooling and environment files
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
