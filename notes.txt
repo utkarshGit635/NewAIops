@@ -17,3 +17,95 @@ python train.py
 Step 6: Create and start the fastapi
 uvicorn main:app --reload
 python -m uvicorn main:app --reload
+
+==========================================
+
+Phase 2 : Dockerize ML application
+
+===========================================
+
+Traditional ML Flow:
+Dataset -> Train -> Model Evaluation -> Prediction
+
+Production ready ML application:
+Saved model -> python app -> REST API -> Automated Test -> Docker Container -> CI/CD
+Can be tested, deployed, accessed by clients and maintained consistently.
+
+Why we need Docker ?
+- Imagine right now ML application is working on your macbook, but fails on another engineer's laptop that runs it on a Linus/windows server.
+
+Possible reasons of failure:
+- Different python versions
+- Different versions of scikit-learn or fastapi
+- Missing python packages
+- Different OS dependencies
+
+Docker helps package your application code, runtime, dependencies and startup instructions into a standardized image.
+
+4 major requirements:
+- Dockerfile -> instructions for packaging the ML application
+- Image -> packaged reusable application artifact
+- Container -> running instance of that image
+- Port Mapping -> Makes the API inside the Container accessible from your system
+
+Commands for Docker
+1. docker ps = print all running containers
+2. docker ps -a = print all active/non-active containers
+3. docker build -t cse-mlops .
+= build docker image
+-t = tag = name of the image
+4. docker images = list locally available docker images
+5. Start the container :
+docker run -d --name iris-ml-api -p 8000:8000 cse-mlops
+
+================================================================
+Phase - 3 Automated testing and CI/CD with Github Actions
+================================================================
+
+What's our goal ?
+Developer pushes code to Github
+Github Actions start the workflow
+Triggered by a push or pull request
+
+Run tests:
+Validate model API behavior
+Build Image
+Verify Docker packaging
+
+What is CI/CD ?
+- CI - Continuous Integration: Automatically validates code changes through tests and build checks
+- CD - Continuous Delivery: Keeps changes ready for release, with production release potentially requiring approval
+- CD - Continuous Deployment: Automatically releases changes to production when all required checks pass 
+
+
+Automated testing
+- Automated testing catches issues before a change moves to production
+- Pytest + FastAPI Test Client + Github Actions
+
+Update the project structure :
+- mlops-first-pipeline
+---- tests
+---------test_api.py
+-----.github
+---------workflows
+----------------ci.yml
+
+Now install two new packages:
+- httpx: FastAPI TestClient uses httpx to simulate http request to your application
+- pytest: It discovers and run automates tests, report failures, and returns non-zero exit status when tests fail
+
+pip install httpx pytest
+
+Run test locally
+python -m pytest -validates
+
+Create the Github Actions Workflow
+
+Push the project to Github
+Commands:
+git init
+git add .
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/utkarshGit635/AIop_Deployment.git
+
