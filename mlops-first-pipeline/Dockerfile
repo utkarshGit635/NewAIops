@@ -9,7 +9,7 @@ COPY requirements.txt .
 # avoid caching the installed dependencies in the Docker image
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY main.py .
 
 EXPOSE 8000
 

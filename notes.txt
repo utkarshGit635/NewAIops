@@ -108,4 +108,79 @@ git add .
 git commit -m "first commit"
 git branch -M main
 git remote add origin https://github.com/utkarshGit635/AIop_Deployment.git
+git push -u origin main
 
+Progress so far:
+Train model and create Fasr API application - Done
+Containerize the application with Docker - Done
+Automated tests with Github CI - Done
+Experiment tracking and model registry with MLFlow - Next Step
+Container registry and cloud Deployment
+Production monitoring and drift detection
+Automated training and model prediction
+
+
+=================================================
+Phase - 4: MLFlow - Experiment tracking and model registry
+=================================================
+
+Why do we need MLFlow ?
+- Imagine you train a model multiple times, changing the parameters or data version 
+- Without experiment tracking you might end up with files like model_v1.joblib, model_v2.joblib, model_final.joblib.
+- MLFlow helps us maintain that record 
+
+Training Experiments
+- Model parameters, dataset details and evaluation results
+
+MLFlow tracking
+- Records parameters, metrics, run information and model artifacts
+
+MLFlow model registry
+- Organize model versions, metadata and lifecycle management
+
+Deployment pipeline 
+- Select, validate and deploy approved model version
+
+Four major concepts:
+- Experiment - collection of related training runs 
+- Run - one execution of training with specific parameters and results
+- artifact - saved file produced by a run, such as a trained model or evaluation report
+- Model registry - managed catalog of registered models and their versions
+
+Install MLFlow
+pip install mlflow
+
+mlflow server --backend-store-uri sqlite:///mlflow.db --host 127.0.0.1 --port 5000
+
+Evaluate and promote model versions
+- We will add a validation gate that checks model quality before allowing a model version to be considered for deployment
+
+Promote a validated model using champion alias
+- Our FastAPI application loads a model from a local file
+- This works for demo purpose, but becomes harder to manage when you have multiple model versions.
+
+- Instead of hardcoding a file path or version, we can assign the alias champion to the model version we want our application to use.
+
+Containerize the MLFlow Connected API
+MLFlow server running on our machine
+Model registry + model artifacts
+
+Docker network connection
+Docker container
+
+FastAPI -> loads iris-classifier@champion
+prediction API
+
+Make MLFlow accessible to docker
+
+Restart mlflow with IP - 0.0.0.0
+mlflow server \
+--backend-store-uri sqlite:///mlflow.db \
+--host 0.0.0.0 \
+-- port 5000
+
+build docker image again
+docker build -t iris-ml-api:v2 .
+
+Start the container and test API
+docker run -d --name iris-ml-api-container -p 8000:8000 -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 iris-ml-api:v2

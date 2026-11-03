@@ -7,7 +7,7 @@ from main import app
 # Create a reusable test client for all test functions.
 client = TestClient(app)
 
-def test_health_endppoint():
+def test_health_endpoint():
     """
     Verify that the application is running and can respond to a health check request.
     
@@ -19,7 +19,11 @@ def test_health_endppoint():
     assert response.status_code == 200
     
     # Now check response body
-    assert response.json() == {"status": "healthy"}
+    result = response.json()
+    assert result["status"] == "healthy"
+    assert result["model_name"] == "IrisRandomForestModel"
+    assert result["model_alias"] == "champion"
+    assert result["model_version"] != "unknown"
 
 
 def test_valid_iris_prediction():
