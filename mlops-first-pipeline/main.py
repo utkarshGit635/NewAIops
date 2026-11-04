@@ -1,61 +1,30 @@
-import logging
-import os
 from pathlib import Path
-
 import joblib
-from fastapi import FastAPI
-import mlflow
-from mlflow.exceptions import MlflowException
-from mlflow import MlflowClient
-import mlflow.sklearn
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
+import mlflow
+import mlflow.sklearn
+import numpy as np
+import os
+from contextlib import asynccontextmanager
+from typing import Callable
 
 
-logger = logging.getLogger(__name__)
-
-# MLflow configuration
+# MLFlow Configuration
 MLFLOW_TRACKING_URI = os.getenv(
-    "MLFLOW_TRACKING_URI", "http://127.0.0.1:5000"
+    "MLFLOW_TRACKING_URI", "http://127.0.0.1:7001"
 )
+
 MODEL_NAME = os.getenv("MLFLOW_MODEL_NAME", "IrisRandomForestModel")
 MODEL_ALIAS = os.getenv("MLFLOW_MODEL_ALIAS", "champion")
 MODEL_URI = f"models:/{MODEL_NAME}@{MODEL_ALIAS}"
 LOCAL_MODEL_PATH = Path(__file__).parent / "models" / "iris_model.pkl"
 
-mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
-app = FastAPI(title="Iris Classification")
-
-
-def load_model():
-    """Load the configured MLflow model, falling back to the local artifact."""
-    try:
-        client = MlflowClient()
-        model_version = client.get_model_version_by_alias(
-            name=MODEL_NAME,
-            alias=MODEL_ALIAS,
-        ).version
-        loaded_model = mlflow.sklearn.load_model(MODEL_URI)
-        logger.info("Loaded model %s version %s", MODEL_URI, model_version)
-        return loaded_model, str(model_version)
-    except MlflowException as mlflow_error:
-        if not LOCAL_MODEL_PATH.exists():
-            raise RuntimeError(
-                f"Could not load {MODEL_URI} from MLflow and local model "
-                f"does not exist at {LOCAL_MODEL_PATH}: {mlflow_error}"
-            ) from mlflow_error
-
-        logger.warning(
-            "Could not load %s from MLflow; using local model %s: %s",
-            MODEL_URI,
-            LOCAL_MODEL_PATH,
-            mlflow_error,
-        )
-        return joblib.load(LOCAL_MODEL_PATH), "unknown"
-
-
-model, model_version = load_model()
-
+def load_mlflow_model():
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    model = mlflow.sklearn.load_model(MODEL_URI)
+    return model
 
 class IrisInput(BaseModel):
     sepal_length: float = Field(gt=0)
@@ -63,33 +32,72 @@ class IrisInput(BaseModel):
     petal_length: float = Field(gt=0)
     petal_width: float = Field(gt=0)
 
-
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to the Iris Classification API!"}
-
-
-@app.get("/health")
-def health_check():
-    return {
-        "status": "healthy",
-        "model_name": MODEL_NAME,
-        "model_alias": MODEL_ALIAS,
-        "model_version": model_version,
-    }
-
-
-@app.post("/predict")
-def predict(data: IrisInput):
-    features = [[
-        data.sepal_length,
-        data.sepal_width,
-        data.petal_length,
-        data.petal_width
-    ]]
+def create_app(model_loader: Callable=load_mlflow_model,
+               version_loader: Callable=None):
     
-    prediction = int(model.predict(features)[0])
-    return {
-        "prediction": prediction,
-        "class_name": ["setosa", "versicolor", "virginica"][prediction]
-    }
+    if version_loader is None:
+        def version_loader():
+            client = mlflow.MlflowClient(
+                tracking_uri=MLFLOW_TRACKING_URI
+            )
+            champion_version = client.get_model_version_by_alias(
+                name=MODEL_NAME,
+                alias=MODEL_ALIAS
+            )
+            return champion_version.version
+    
+    @asynccontextmanager
+    async def lifespan(app:FastAPI):
+        try:
+            app.state.model = model_loader()
+        except Exception as ex:
+            raise RuntimeError(
+                f"Failed to load model: {ex}"
+            )
+        client = mlflow.MlflowClient(
+            tracking_uri=MLFLOW_TRACKING_URI
+        )
+        app.state.model_version = version_loader()
+        yield
+
+    app = FastAPI(
+        title="Iris Classification API",
+        description="Iris prediction API powered by MLFlow",
+        version="3.0.0",
+        lifespan=lifespan
+    )
+        
+    @app.get("/")
+    def ready_to_serve():
+        return {"status": "Ready to serve"}
+
+    @app.get("/health")
+    def health_check():
+        return {
+            "status": "healthy",
+            "model_name": MODEL_NAME,
+            "model_alias": MODEL_ALIAS,
+            "model_version": app.state.model_version
+            }
+
+    # Endpoint for making predictions with the Iris Random Forest model
+    @app.post("/predict")
+    def predict(data: IrisInput, request: Request):
+        model = request.app.state.model
+        features = [[
+            data.sepal_length,
+            data.sepal_width,
+            data.petal_length,
+            data.petal_width
+        ]]
+        prediction = int(model.predict(features)[0])
+        print("Prediction is",prediction)
+        return {
+            "prediction": prediction,
+            "class_name": ["setosa", "versicolor", "virginica"][prediction]
+        }
+
+    return app
+        
+# Production application instance
+app = create_app()
